@@ -1,3 +1,11 @@
+body{
+  padding:none;
+  margin:none;
+  border-radius: 1rem;
+  width: 500px;
+  height:500px;
+
+}
 .container {
     width: 500px;
     height:500px;
@@ -21,10 +29,13 @@
   
   .content-flex {
     display: flex;
+    flex-direction: column; 
+    align-items: center;
+    gap: 20px;
     width: 100%;
     height:396.8px;
     border-radius: 0.5rem;
-    justify-content: center;
+    
   }
   .prompt-box{
     display:flex;
@@ -45,17 +56,21 @@
     scrollbar-width: thin;
     scrollbar-color: black;
   }
- 
- 
-  
- .bookmark-controls img {
-    margin: 0 4px;
-    width: 18px;
-    height: 18px;
+  .btn-container{
+    display:flex;
+    transform: translateX(-3px);
+    transform: translateY(20px);
+    flex-direction: row; 
+    gap: 50px;
+    width:400;
+    height:30;
+    padding: 3px;
+}
+
+  button {
+    border: none;
     cursor: pointer;
+    appearance: none;
+    background-color: inherit;
   }
   
-  .bookmark-controls {
-    flex: auto;
-    text-align: right;
-  }
