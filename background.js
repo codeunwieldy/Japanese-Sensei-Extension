@@ -12,7 +12,7 @@ let currentURL = "";
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     const {type}= request;
     if (type === 'GET_API_KEY') {
-            const apiKey = "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";
+            const apiKey = "";
             sendResponse({ apiKey: apiKey });
         }
     else if(type ==='SEND'){
