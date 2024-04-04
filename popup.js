@@ -48,7 +48,7 @@ reset.addEventListener('click', resetFunc);
 
 
 
-const TextFromInput = async (textContent) => {
+const textFromInput = async (textContent) => {
     try {
         // Make a POST request to OpenAI API
         let key = await getKey();
@@ -89,7 +89,7 @@ const TextFromInput = async (textContent) => {
     
 };
 
-const TextToSpeach = async (textContent) => {
+const textToSpeach = async (textContent) => {
     try {
         // Make a POST request to OpenAI API
         let key = await getKey();
@@ -124,15 +124,46 @@ const TextToSpeach = async (textContent) => {
     
 };
 
+const speachToText = async (wav) => {
+    try {
+        // Make a POST request to OpenAI API
+        let key = await getKey();
+        const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer "+ key
+            },
+            body: JSON.stringify({
+                model: "whisper-1",
+                file: wav ,  //from argument
+            })
+        });
+
+        // Check if request was successful
+        if (!response.ok) {
+            throw new Error("Network response was not ok");
+            
+        }
+        console.log(response);
+        textFromInput(response); //puts the text into the chat gpt api
+        
+
+    } catch (error) {
+        console.error("Error sending text to OpenAI:", error);
+    }
+    
+};
+
 chrome.runtime.onMessage.addListener(function(highlighedText, sender, sendResponse) {
     resetFunc(); //resets the text on the page
     const {type}= highlighedText;
     if (type === 'DOMtext') {
-        chrome.storage.sync.get(["highlightedV"],(data)=>{  //gest the highlighted text that was put in chrome storage
+        chrome.storage.sync.get(["highlightedV"],(data)=>{  //gets the highlighted text that was put in chrome storage
             const selected = data.highlightedV;   //highlited text 
             textArea.value += selected; // adds that to the text area
-            TextFromInput(selected)    //sends to gpt for a translation
-            setState('active');
+            textFromInput(selected)    //sends to gpt for a translation
+            setState('active'); //sets the state of textArea to active
 
       });
     }
@@ -153,7 +184,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     const audioButton = document.getElementById('mic');
-    audioButton.setAttribute('state','inactive');
+    audioButton.setAttribute('state','inactive'); //initially set to inactive
 
     audioButton.addEventListener("click", async ()=>{
         const tab = await getActiveTab();  //from utils, grabs current tab
@@ -167,15 +198,41 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             })
         }else{
-            chrome.tabs.sendMessage(tab,{action: "stop_audio"},function(responce){
+            chrome.tabs.sendMessage(tab,{action: "stop_audio"}, async function(responce){
                 if(!chrome.runtime.lastError){
                     console.log(responce);
-                }else{
+                    // Retrieve the data URI from chrome.storage.local
+                try{
+                    let result = await new Promise((resolve,reject)=>{
+                        chrome.storage.local.get('audioBlobURL', function(result) {
+                            if (chrome.runtime.lastError) {
+                                reject(chrome.runtime.lastError);
+                            } else {
+                                resolve(result); //resolves teh result
+                            }
+                    
+                        });
+
+                    })
+                    
+                    let blobURL = result.audioBlobURL;
+                    // Use the Blob URL to fetch the Blob object
+                    let blobResponse = await fetch(blobURL);
+                    let blob = await blobResponse.blob();
+                    let audioData = await blob.arrayBuffer();
+                    // Pass the audio data to speachToText function                              ///////////////make the text get printed to the
+                    speachToText(audioData);
+                }catch(error){
+                    console.error("Error retrieving audioBlobURL:", error);
+                }
+                
+               }else{
                     console.log(chrome.runtime.lastError, 'error line 156');
                 }
-                })
+                });
                 changeAudioBtnState(); //changes the button to active
         }
+        
     });
 
    
@@ -200,7 +257,7 @@ send.addEventListener("click",async function(){
             const textContent = await document.getElementById("textInput").value;
             console.log(textContent);
             if(textArea.getAttribute('state') != 'cleared'){ //if the text area has the attribute of cleared
-            TextFromInput(textContent);
+            textFromInput(textContent);
             }
         } catch (error) {
         console.error("Error retrieving text from page:", error);
@@ -215,7 +272,7 @@ hear.addEventListener("click",async function(){
                 const text = data.curentResponce; // text from the current responce
                 console.log(text)
                 if(text!==''){
-                TextToSpeach(text); //sends current chatgpt responce to the textToSpeach
+                textToSpeach(text); //sends current chatgpt responce to the textToSpeach
                 }
              })
              
@@ -227,7 +284,4 @@ hear.addEventListener("click",async function(){
 
 });
 
-let record = document.getElementById("mic")
-record.addEventListener("click", async function(){
-    const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
-});
+
