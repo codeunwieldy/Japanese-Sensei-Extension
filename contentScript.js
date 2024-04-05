@@ -2,56 +2,70 @@
     console.log("i have been injected") // just making sure
    
     var recorder = null;
+    var recordedChunks = []
     function onAccessApproved(stream){
+        recordedChunks = []
         recorder = new MediaRecorder(stream);
-        recorder.start();
-
-        recorder.onstop = function(){
-            stream.getTracks().forEach(function(track){ //for each stream chunk thaat is sent as an array
-                if(track.readyState === 'live'){
-                    track.stop();             //stops recording
-                }
-            })
-        }
-
         recorder.ondataavailable = function(event){
-            let recordedBlob = event.data;
-            let blobURL = URL.createObjectURL(recordedBlob); //makes url for blob
-            chrome.storage.local.set({ 'audioBlobURL': blobURL }); //puts url into storage to be accesed by popup.js
+            // Push each chunk of recorded audio data into the recordedChunks array
+            recordedChunks.push(event.data);
+        
+        }
+        
+        
+        recorder.onstop = function(){
+            console.log("Recording stopped");
+            // Concatenate all recorded chunks into a single Blob
+            const completeBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+            console.log("Complete Blob created:", completeBlob);
+    
+            // Create URL for the entire recording
+            const blobURL = URL.createObjectURL(completeBlob);
+    
+            // Store the URL in local storage
+            chrome.storage.local.set({ 'audioBlobURL': blobURL }, function() {
+                console.log('Blob URL stored in local storage');
+            });
+            
+            // Stop all tracks in the stream
+            stream.getTracks().forEach(function(track){
+                if(track.readyState === 'live'){
+                    track.stop();
+                }
+            });
+            // Reset recordedChunks array for future recordings
             
         }
+        
+        
+        recorder.start();
+} 
 
+document.addEventListener("mouseup",function(){
+console.log('mouseup on page ')
+    const selection = window.getSelection();
+const selectedText = selection.toString().trim()
+console.log(selectedText);
 
-
-    }
-   
-   
-   
-   
-   
+if (selectedText !==''){
+    chrome.storage.sync.set({["highlightedV"]:JSON.stringify(selectedText)});
+    chrome.runtime.sendMessage({ 
+    type: "DOMtext"
+});
+}   
+} );   
    
     const cuurretTabURL = "";
-    chrome.runtime.onMessage.addListener((obj, sender, responce) => {
+    chrome.runtime.onMessage.addListener((obj, sender, response) => {
         const {type, tabURL,action}= obj; //desctructure object             //imma have to chaneg this stuff form url to the tab
         if(type ==="NEW"){
             cuurretTabURL = tabURL;
-            highlightedV = "highlightedV"
-            document.addEventListener("mouseup",function(){
-            const selection = window.getSelection();
-            const selectedText = selection.toString().trim()
-
-            if (selectedText !==''){
-                chrome.storage.sync.set({[highlightedV]:JSON.stringify(selectedText)});
-                chrome.runtime.sendMessage({ 
-                type: "DOMtext", 
-            });
-        }   
-    } );   
+           
       
     }
-    if(action === 'request_audio'){
+    else if(action === 'request_audio'){
         console.log("request recording");
-        responce(`processed: ${action}`);
+        response(`processed: ${action}`);
 
         navigator.mediaDevices.getUserMedia({ //this returns a promise of the media stream
             audio:{
@@ -64,9 +78,9 @@
 
 
     }
-    if(action === 'stop_audio'){
+    else if(action === 'stop_audio'){
         console.log("request stop recording");
-        responce(`processed: ${action}`);
+        response(`processed: ${action}`);
         if(!recorder){
             return console.log("no recorder yet")
         }else{

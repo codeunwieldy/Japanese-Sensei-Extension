@@ -1,7 +1,7 @@
 chrome.tabs.onUpdated.addListener((changeInfo, tab) => {
     if (changeInfo.status === 'complete') { // Check if the tab has finished loading
         const urlParameters = tab.url; 
-        chrome.tabs.sendMessage(tab.tabId[0],{
+        chrome.tabs.sendMessage(tab.id,{
             type: "NEW",                      // Type of the event
             tabURL: urlParameters             // Unique video id we will be storing
         });

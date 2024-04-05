@@ -1,4 +1,4 @@
-//need to make it so when the page has been set to cleared the current responce in storage is cleared 
+//need to make it so when the page has been set to cleared the current response in storage is cleared 
 
 // still dont know how to use the mic and record audio to be sent
 //dont know how to keep the extension open when i am going to highlight text / maybe use the dropper as a reference
@@ -15,7 +15,7 @@ textArea.setAttribute('state', 'cleared')
 function setState(newValue) {           //sets if the text Area has text in it or not
     textArea.setAttribute('state', newValue);
     if(textArea.getAttribute('state')==='cleared'){
-        chrome.storage.sync.set({'curentResponce': JSON.stringify('')});
+        chrome.storage.sync.set({'curentresponse': JSON.stringify('')});
     }
 
 }
@@ -26,6 +26,7 @@ const getKey = async () => {
         const response = await new Promise((resolve, reject) => {
             chrome.runtime.sendMessage({ type: 'GET_API_KEY' }, function(response) {
                 if (response && response.apiKey) {
+                    console.log('i got the key');  ///take this away later
                     resolve(response.apiKey);
                 } else {
                     reject(new Error('Failed to retrieve API key'));
@@ -74,14 +75,15 @@ const textFromInput = async (textContent) => {
 
         // Extract completion from response
         const comp = data.choices[0].message.content;
-        chrome.storage.sync.set({'curentResponce': JSON.stringify(comp)}); //puts the responce in storage to be used later
+        chrome.storage.sync.set({'curentresponse': JSON.stringify(comp)}); //puts the response in storage to be used later
         
         // Update textarea with response
-       const existingTextArea = document.getElementById("textInput");  //adds reponce to responce box
+       const existingTextArea = document.getElementById("textInput");  //adds reponce to response box
        if (existingTextArea) {
         existingTextArea.value += '\n' + comp;
       }
       setState("active");
+      textArea.setAttribute('state',"active"); //delete this later
 
     } catch (error) {
         console.error("Error sending text to OpenAI:", error);
@@ -124,33 +126,32 @@ const textToSpeach = async (textContent) => {
     
 };
 
-const speachToText = async (wav) => {
+const speachToText = async (formData) => {
     try {
         // Make a POST request to OpenAI API
         let key = await getKey();
         const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer "+ key
+                "Authorization": `Bearer ${key}`
             },
-            body: JSON.stringify({
-                model: "whisper-1",
-                file: wav ,  //from argument
-            })
+            body: formData
         });
 
         // Check if request was successful
         if (!response.ok) {
             throw new Error("Network response was not ok");
             
+        }else{
+            const responseBody = await response.json();
+            console.log(responseBody.text);
+            return responseBody.text
+        
         }
-        console.log(response);
-        textFromInput(response); //puts the text into the chat gpt api
         
 
     } catch (error) {
-        console.error("Error sending text to OpenAI:", error);
+        console.error("Error sending data to OpenAI:", error);
     }
     
 };
@@ -190,25 +191,26 @@ document.addEventListener("DOMContentLoaded", () => {
         const tab = await getActiveTab();  //from utils, grabs current tab
         if(audioButton.getAttribute('state')==='inactive'){
             changeAudioBtnState(); //changes the button to active
-        chrome.tabs.sendMessage(tab,{action: "request_audio"},function(responce){
+        chrome.tabs.sendMessage(tab.id,{action: "request_audio"},function(response){
             if(!chrome.runtime.lastError){
-                console.log(responce);
+                console.log(response);
             }else{
-                console.log(chrome.runtime.lastError, 'error line 156');
+                console.log(chrome.runtime.lastError, 'error line 197');
             }
             })
         }else{
-            chrome.tabs.sendMessage(tab,{action: "stop_audio"}, async function(responce){
+            chrome.tabs.sendMessage(tab.id,{action: "stop_audio"}, async function(response){
                 if(!chrome.runtime.lastError){
-                    console.log(responce);
+                    console.log(response);
                     // Retrieve the data URI from chrome.storage.local
                 try{
                     let result = await new Promise((resolve,reject)=>{
-                        chrome.storage.local.get('audioBlobURL', function(result) {
+                        chrome.storage.local.get(['audioBlobURL'], function(result) {
                             if (chrome.runtime.lastError) {
                                 reject(chrome.runtime.lastError);
                             } else {
                                 resolve(result); //resolves teh result
+                                console.log('Retrieved Blob URL from local storage:', result.audioBlobURL);
                             }
                     
                         });
@@ -218,16 +220,28 @@ document.addEventListener("DOMContentLoaded", () => {
                     let blobURL = result.audioBlobURL;
                     // Use the Blob URL to fetch the Blob object
                     let blobResponse = await fetch(blobURL);
-                    let blob = await blobResponse.blob();
-                    let audioData = await blob.arrayBuffer();
-                    // Pass the audio data to speachToText function                              ///////////////make the text get printed to the
-                    speachToText(audioData);
+                    
+                    let blob = await blobResponse.blob()
+                    console.log("Retrieved blob:", blob); 
+                    
+                    const file = blob;
+                    const formData = new FormData();
+                    formData.append('file', file, 'recording.webm'); 
+                    formData.append('model', 'whisper-1');
+                     //form data goes intto the body of the request
+                    const transcript = await speachToText(formData);
+                    if(textArea.getAttribute('state')==='cleared'){
+                        textArea.value+= transcript;  //if there is no text in the text box
+                        }else{
+                            textArea.value+= '\n'+transcript; // if there is text in the text box this makes sure to add a new line before pasting
+                        }
+                    textFromInput(transcript); //puts the text into the chat gpt api
                 }catch(error){
                     console.error("Error retrieving audioBlobURL:", error);
                 }
                 
                }else{
-                    console.log(chrome.runtime.lastError, 'error line 156');
+                    console.log(chrome.runtime.lastError, 'error line 230');
                 }
                 });
                 changeAudioBtnState(); //changes the button to active
@@ -268,11 +282,11 @@ const hear = document.getElementById("hear")
 hear.addEventListener("click",async function(){
     try {
         if(textArea.getAttribute('state')!=='cleared') // do only if state of textArea us cleared
-             chrome.storage.sync.get(['curentResponce'],(data)=>{
-                const text = data.curentResponce; // text from the current responce
+             chrome.storage.sync.get(['curentresponse'],(data)=>{
+                const text = data.curentresponse; // text from the current response
                 console.log(text)
                 if(text!==''){
-                textToSpeach(text); //sends current chatgpt responce to the textToSpeach
+                textToSpeach(text); //sends current chatgpt response to the textToSpeach
                 }
              })
              
