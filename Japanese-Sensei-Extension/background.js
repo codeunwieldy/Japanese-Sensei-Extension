@@ -14,7 +14,7 @@ chrome.tabs.onUpdated.addListener((tabID, changeInfo) => {
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     const {type}= request;
     if (type === 'GET_API_KEY') {
-            const apiKey = "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";
+            const apiKey = "";
             sendResponse({ apiKey: apiKey });
         }
 });
