@@ -188,7 +188,13 @@ document.addEventListener("DOMContentLoaded", () => {
     audioButton.setAttribute('state','inactive'); //initially set to inactive
 
     audioButton.addEventListener("click", async ()=>{
-        const tab = await getActiveTab();  //from utils, grabs current tab
+        const tab = await getActiveTab();
+                    if (tab && tab.id) {
+                             // Use the tab ID
+                            console.log("Current tab ID:", tab.id);
+                        } else {
+                             console.error("Unable to get the ID of the current tab");
+                        }
         if(audioButton.getAttribute('state')==='inactive'){
             changeAudioBtnState(); //changes the button to active
         chrome.tabs.sendMessage(tab.id,{action: "request_audio"},function(response){
@@ -199,27 +205,55 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             })
         }else{
-            chrome.tabs.sendMessage(tab.id,{action: "stop_audio"}, async function(response){
-                if(!chrome.runtime.lastError){
-                    console.log(response);
-                    // Retrieve the data URI from chrome.storage.local
-                try{
-                    let result = await new Promise((resolve,reject)=>{
-                        chrome.storage.local.get(['audioBlobURL'], function(result) {
-                            if (chrome.runtime.lastError) {
-                                reject(chrome.runtime.lastError);
-                            } else {
-                                resolve(result); //resolves teh result
-                                console.log('Retrieved Blob URL from local storage:', result.audioBlobURL);
-                            }
+            try {
+                     // Get the current tab
+                    const tab = await getActiveTab();
+                    let tabID = (tab.id).toString();
                     
-                        });
+                const response = await new Promise((resolve, reject) => {
+                    chrome.tabs.sendMessage(tab.id, { action: "stop_audio" }, function(response) {
+                        if (!chrome.runtime.lastError) {
+                            resolve(response);
+                        } else {
+                            reject(chrome.runtime.lastError);
+                        }
+                    });
+                });
+                console.log("Response from stop_audio:", response);
+                if (response) {
+                    
+                    let blobURL;
 
-                    })
-                    
-                    let blobURL = result.audioBlobURL;
-                    // Use the Blob URL to fetch the Blob object
-                    let blobResponse = await fetch(blobURL);
+                // Define an asynchronous function to handle the logic
+            const getBlobUrlAndProcess = async () => {
+                // Wrap the timeout in a promise to use await
+             blobURL = await new Promise((resolve, reject) => {
+                setTimeout(async () => {
+                    await new Promise((resolveInner, rejectInner) => {
+                        chrome.storage.local.get([tabID], function(result) {
+                            if (chrome.runtime.lastError) {
+                             rejectInner(chrome.runtime.lastError);
+                            } else {
+                             resolveInner(result[tabID]); // Resolves the inner promise with the result
+                                console.log(`After delay: Retrieved Blob URL from local storage at key ${tabID}`, result[tabID]);
+                        }
+                    });
+                }).then(resolve); // Resolve the outer promise with the value from the inner promise
+            }, 100); 
+        });
+
+        // Log the Blob URL after the promise resolves
+        console.log('Blob URL: ' + blobURL);
+
+        
+            return await fetch(blobURL);
+            // Further processing using blobResponse...
+        
+            };
+
+    // Call the asynchronous function we've defined
+        let blobResponse= await getBlobUrlAndProcess();
+
                     
                     let blob = await blobResponse.blob()
                     console.log("Retrieved blob:", blob); 
@@ -228,22 +262,24 @@ document.addEventListener("DOMContentLoaded", () => {
                     const formData = new FormData();
                     formData.append('file', file, 'recording.webm'); 
                     formData.append('model', 'whisper-1');
-                     //form data goes intto the body of the request
+                    // Form data goes into the body of the request
                     const transcript = await speachToText(formData);
-                    if(textArea.getAttribute('state')==='cleared'){
-                        textArea.value+= transcript;  //if there is no text in the text box
-                        }else{
-                            textArea.value+= '\n'+transcript; // if there is text in the text box this makes sure to add a new line before pasting
-                        }
-                    textFromInput(transcript); //puts the text into the chat gpt api
-                }catch(error){
-                    console.error("Error retrieving audioBlobURL:", error);
+                    if (textArea.getAttribute('state') === 'cleared') {
+                        textArea.value += transcript;  // If there is no text in the text box
+                    } else {
+                        textArea.value += '\n' + transcript; // If there is text in the text box, add a new line before pasting
+                    }
+                    textFromInput(transcript); // Puts the text into the chat GPT API
+                } else {
+                    console.log('No response received from stop_audio');
                 }
+            } catch(error) {
+                console.error("Error occurred:", error); // Log the entire error object
+            }
                 
-               }else{
-                    console.log(chrome.runtime.lastError, 'error line 230');
-                }
-                });
+                
+               
+                
                 changeAudioBtnState(); //changes the button to active
         }
         
@@ -264,10 +300,6 @@ send.addEventListener("click",async function(){
             console.error("Unable to get the ID of the current tab");
         }
 
-        // Send a message to the background script to retrieve text content from the webpage
-        chrome.runtime.sendMessage( { 
-            type: "SEND", 
-            });
             const textContent = await document.getElementById("textInput").value;
             console.log(textContent);
             if(textArea.getAttribute('state') != 'cleared'){ //if the text area has the attribute of cleared

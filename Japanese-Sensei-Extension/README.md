@@ -13,6 +13,7 @@ for this function, gpt will be instructed to read it out in japanese.
 
 -------------see if mic has any input throw error to user interface if nothing is being opicked up------------------
 -------------i think when i hit send rn it sends the entire text area not just the user input----------------------
+might be using the previouses tab to store the url
 
 
 add a subtle loading indicator for when a responce is being preoccesed by any of the apis
